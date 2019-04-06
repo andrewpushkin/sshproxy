@@ -22,7 +22,7 @@ func (p *SshConn) serve() error {
 		log.Println("failed to handshake")
 		return (err)
 	}
-
+	log.Println("wwwwwwwwwwwwwwwww")
 	defer serverConn.Close()
 
 	clientConn, err := p.callbackFn(serverConn)
@@ -37,19 +37,19 @@ func (p *SshConn) serve() error {
 
 	for newChannel := range chans {
 
-		channel2, requests2, err2 := clientConn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
-		if err2 != nil {
-			log.Printf("Could not accept client channel: %s", err.Error())
-			return err
-		}
-
-		channel, requests, err := newChannel.Accept()
+		channel_client, requests_client, err := clientConn.OpenChannel(newChannel.ChannelType(), newChannel.ExtraData())
 		if err != nil {
-			log.Printf("Could not accept server channel: %s", err.Error())
+			log.Printf("Could not accept client channel_server: %s", err.Error())
 			return err
 		}
 
-		// connect requests
+		channel_server, requests_server, err := newChannel.Accept()
+		if err != nil {
+			log.Printf("Could not accept server channel_server: %s", err.Error())
+			return err
+		}
+
+		// connect requests_server
 		go func() {
 			log.Printf("Waiting for request")
 
@@ -59,13 +59,13 @@ func (p *SshConn) serve() error {
 				var dst ssh.Channel
 
 				select {
-				case req = <-requests:
-					dst = channel2
-				case req = <-requests2:
-					dst = channel
+				case req = <-requests_server:
+					dst = channel_client
+				case req = <-requests_client:
+					dst = channel_server
 				}
 
-				log.Printf("Request: %s %s %s %s\n", dst, req.Type, req.WantReply, req.Payload)
+				//	log.Printf("Request: %s %s %s %s\n", dst, req.Type, req.WantReply, req.Payload)
 
 				b, err := dst.SendRequest(req.Type, req.WantReply, req.Payload)
 				if err != nil {
@@ -76,6 +76,7 @@ func (p *SshConn) serve() error {
 					req.Reply(b, nil)
 				}
 
+				log.Println("Req type:", req.Type)
 				switch req.Type {
 				case "exit-status":
 					break r
@@ -86,23 +87,23 @@ func (p *SshConn) serve() error {
 				}
 			}
 
-			channel.Close()
-			channel2.Close()
+			channel_server.Close()
+			channel_client.Close()
 		}()
 
 		// connect channels
 		log.Printf("Connecting channels.")
 
-		var wrappedChannel io.ReadCloser = channel
-		var wrappedChannel2 io.ReadCloser = channel2
+		var wrappedChannel io.ReadCloser = channel_server
+		var wrappedChannel2 io.ReadCloser = channel_client
 
 		if p.wrapFn != nil {
-			// wrappedChannel, err = p.wrapFn(channel)
-			wrappedChannel2, err = p.wrapFn(serverConn, channel2)
+			// wrappedChannel, err = p.wrapFn(channel_server)
+			wrappedChannel2, err = p.wrapFn(serverConn, channel_client)
 		}
 
-		go io.Copy(channel2, wrappedChannel)
-		go io.Copy(channel, wrappedChannel2)
+		go io.Copy(channel_client, wrappedChannel)
+		go io.Copy(channel_server, wrappedChannel2)
 
 		defer wrappedChannel.Close()
 		defer wrappedChannel2.Close()

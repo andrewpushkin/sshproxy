@@ -1,15 +1,22 @@
 package main
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
+	"strings"
 
-	"github.com/dutchcoders/sshproxy"
+	"github.com/andrewpushkin/sshproxy"
 	"golang.org/x/crypto/ssh"
 )
+
+func KeyPrint(dialAddr string, addr net.Addr, key ssh.PublicKey) error {
+	fmt.Printf("%s %s %s\n", strings.Split(dialAddr, ":")[0], key.Type(), base64.StdEncoding.EncodeToString(key.Marshal()))
+	return nil
+}
 
 func main() {
 	listen := flag.String("listen", ":8022", "listen address")
@@ -38,7 +45,9 @@ func main() {
 				"password": string(pass),
 			}
 
-			clientConfig := &ssh.ClientConfig{}
+			clientConfig := &ssh.ClientConfig{
+				HostKeyCallback: KeyPrint,
+			}
 
 			clientConfig.User = c.User()
 			clientConfig.Auth = []ssh.AuthMethod{
